@@ -27,12 +27,14 @@ fun SourcesScreen(container: AppContainer) {
     val scope = rememberCoroutineScope()
     val sources = container.database.sourceDao().observeAll().collectAsState(initial = emptyList()).value
     var adding by remember { mutableStateOf(false) }
+    var addingLink by remember { mutableStateOf(false) }
     var editing by remember { mutableStateOf<SourceEntity?>(null) }
     val monitor = container.monitorInstance()
 
     Column(Modifier.fillMaxSize()) {
         Row(Modifier.fillMaxWidth().padding(8.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             Button(onClick = { adding = true }, modifier = Modifier.weight(1f)) { Text("Add Source") }
+            OutlinedButton(onClick = { addingLink = true }, modifier = Modifier.weight(1f)) { Text("Add Link") }
             OutlinedButton(onClick = {
                 scope.launch {
                     com.tdm.app.core.logging.LogRepo.log(container.database, "SCHEDULER", "INFO", "manual scan started")
@@ -81,6 +83,7 @@ fun SourcesScreen(container: AppContainer) {
     }
 
     if (adding) SourceDialog(container, templateId = null, onDismiss = { adding = false })
+    if (addingLink) SourceDialog(container, templateId = null, directLink = true, onDismiss = { addingLink = false })
     editing?.let { s ->
         SourceDialog(container, templateId = null, existing = s, onDismiss = { editing = null })
     }
@@ -92,6 +95,7 @@ private fun SourceDialog(
     container: AppContainer,
     templateId: Long?,
     existing: SourceEntity? = null,
+    directLink: Boolean = false,
     onDismiss: () -> Unit,
 ) {
     val scope = rememberCoroutineScope()
@@ -110,16 +114,18 @@ private fun SourceDialog(
     var video by remember { mutableStateOf(existing?.filter?.video ?: true) }
     var documents by remember { mutableStateOf(existing?.filter?.documents ?: true) }
     var archives by remember { mutableStateOf(existing?.filter?.archives ?: true) }
-    var images by remember { mutableStateOf(existing?.filter?.images ?: false) }
-    var startFrom by remember { mutableStateOf(existing?.startFromMode ?: StartFromMode.NOW) }
-    var startValue by remember { mutableStateOf(existing?.startFromValue ?: "") }
+    var images by remember { mutableStateOf(existing?.filter?.images ?: true) }
+    var audio by remember { mutableStateOf(existing?.filter?.audio ?: true) }
+    var startFrom by remember { mutableStateOf(existing?.startFromMode ?: StartFromMode.LAST_N) }
+    var startValue by remember { mutableStateOf(existing?.startFromValue ?: "50") }
     var storageTpl by remember { mutableStateOf(existing?.storageTemplate ?: "{root}/{channel}/{date}/{filename}") }
     var applied by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf("") }
+    var downloadImmediately by remember { mutableStateOf(false) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(if (existing == null) "Add Source" else "Edit Source") },
+        title = { Text(if (existing != null) "Edit Source" else if (directLink) "Add Telegram Link" else "Add Source") },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState())) {
                 if (existing == null && !applied) {
@@ -138,6 +144,7 @@ private fun SourceDialog(
                                     network = t.networkPolicy; profileId = t.scheduleProfileId
                                     video = t.filter.video; documents = t.filter.documents
                                     archives = t.filter.archives; images = t.filter.images
+                                    audio = t.filter.audio
                                     storageTpl = t.storageTemplate
                                     applied = true
                                 },
@@ -154,6 +161,20 @@ private fun SourceDialog(
                         label = { Text("Telegram username, message, topic, or invite link") },
                         modifier = Modifier.padding(top = 6.dp),
                     )
+                    if (directLink) {
+                        Row(
+                            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                            modifier = Modifier.padding(top = 8.dp),
+                        ) {
+                            Text("Download immediately", modifier = Modifier.weight(1f))
+                            Switch(checked = downloadImmediately, onCheckedChange = { downloadImmediately = it })
+                        }
+                        Text(
+                            "If disabled, the selected schedule profile controls when it starts.",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                 }
                 Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     AssistChip(onClick = { autoDownload = !autoDownload },
@@ -185,6 +206,7 @@ private fun SourceDialog(
                     AssistChip(onClick = { documents = !documents }, label = { Text(if (documents) "✓ Docs" else "Docs") })
                     AssistChip(onClick = { archives = !archives }, label = { Text(if (archives) "✓ Archives" else "Arch") })
                     AssistChip(onClick = { images = !images }, label = { Text(if (images) "✓ Images" else "Img") })
+                    AssistChip(onClick = { audio = !audio }, label = { Text(if (audio) "✓ Audio" else "Audio") })
                 }
                 if (existing == null) {
                     Text("Initial scan", style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(top = 8.dp))
@@ -234,6 +256,12 @@ private fun SourceDialog(
                                 ?: throw IllegalStateException(
                                     "Telegram link is invalid, inaccessible, or the message could not be found: $handle"
                                 )
+                            if (directLink && resolved.message?.file == null) {
+                                throw IllegalStateException("The Telegram link must point to a downloadable file or media message.")
+                            }
+                            if (directLink && !downloadImmediately && profileId == null) {
+                                throw IllegalStateException("Choose a schedule profile or enable Download immediately.")
+                            }
                             val chat = resolved.chat
                             val accountId = container.settingsRepository.current().currentAccountId
                             val s = SourceEntity(
@@ -250,7 +278,7 @@ private fun SourceDialog(
                                 enabled = true,
                                 monitoringEnabled = monitoring,
                                 autoDownload = autoDownload,
-                                filter = FileFilter(video, documents, archives, images),
+                                filter = FileFilter(video, documents, archives, images, audio),
                                 scheduleProfileId = profileId,
                                 queueMode = queueMode,
                                 priority = priority,
@@ -259,16 +287,24 @@ private fun SourceDialog(
                                 startFromMode = startFrom,
                                 startFromValue = startValue.trim(),
                             )
-                            container.database.sourceDao().upsert(s)
+                            val sourceId = container.database.sourceDao().upsert(s)
+                            val savedSource = container.database.sourceDao().byId(sourceId)
+                            if (savedSource != null) container.monitorInstance()?.scanSource(savedSource)
                             // A message/file link is both a source and an immediate discoverable item.
-                            resolved.message?.let { container.monitorInstance()?.onMessage(it) }
+                            resolved.message?.let { message ->
+                                container.monitorInstance()?.onMessage(message, forceQueue = directLink)
+                                if (directLink && downloadImmediately) {
+                                    container.database.taskDao().byMessage(message.chatId, message.messageId)
+                                        ?.let { task -> container.engineInstanceOrNull()?.downloadNow(task.id) }
+                                }
+                            }
                         } else {
                             container.database.sourceDao().upsert(
                                 existing.copy(
                                     name = name, monitoringEnabled = monitoring, autoDownload = autoDownload,
                                     queueMode = queueMode, priority = priority, networkPolicy = network,
                                     scheduleProfileId = profileId, storageTemplate = storageTpl,
-                                    filter = FileFilter(video, documents, archives, images),
+                                    filter = FileFilter(video, documents, archives, images, audio),
                                 )
                             )
                         }

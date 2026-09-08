@@ -74,7 +74,7 @@ class MonitorEngine(
 
     /* ------------------------- ingestion pipeline ------------------------- */
 
-    suspend fun onMessage(msg: TgMessageInfo) {
+    suspend fun onMessage(msg: TgMessageInfo, forceQueue: Boolean = false) {
         val file = msg.file ?: return
 
         // Inbox source
@@ -94,7 +94,7 @@ class MonitorEngine(
 
         if (isDuplicate(msg.chatId, msg.messageId, file.fileUniqueId, file.expectedSize)) return
 
-        if (source != null && !source.autoDownload) {
+        if (!forceQueue && source != null && !source.autoDownload) {
             // spec §62: auto-download disabled → leave as DISCOVERED, user can queue manually
             createTask(msg, file, source, TaskStatus.DISCOVERED, seedQueue = false)
             return

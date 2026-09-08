@@ -72,6 +72,12 @@ unzip -l app/build/outputs/apk/release/app-release.apk | grep 'lib/arm64-v8a/'
 
 TDLib session data is kept in application-private storage. API credentials and session data must be treated as sensitive information.
 
+## Direct Telegram file links
+
+Use **Sources → Add Link** to paste a Telegram message URL that points to a downloadable document or media message. The current Telegram account is used to resolve the link, including private channel, group, and topic links that the account can access. TDM validates that the referenced message contains downloadable media, creates a persistent queue task, and retains the chat, message, topic, file, and account identifiers for reliable resumption.
+
+The link dialog provides two execution modes. **Download immediately** marks the task to bypass schedule gating and places it at the front of the normal engine selection logic. When immediate download is disabled, select an existing schedule profile; the task remains queued until that profile's active time window, including overnight windows such as 11:00 PM–2:00 AM. A direct link is rejected when it does not resolve to a file or when neither immediate execution nor a schedule profile is selected.
+
 ## Architecture
 
 ```text
