@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<full-backup-content>
+    <!-- Session and DB are excluded from backup on purpose (security + consistency) -->
+</full-backup-content>

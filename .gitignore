@@ -1,0 +1,23 @@
+# Gradle and Android build output
+.gradle/
+build/
+app/build/
+local.properties
+
+# IDE files
+.idea/
+*.iml
+.externalNativeBuild/
+.cxx/
+
+# Signing material and credentials
+*.jks
+*.keystore
+keystore/
+*.p12
+*.pem
+.env
+
+# Local TDLib/session data
+**/tdlib_db/
+**/tdlib_files/
