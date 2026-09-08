@@ -18,6 +18,8 @@ private val Context.settingsStore: DataStore<Preferences> by preferencesDataStor
 
 /** Global application settings (spec §50). Per-source config lives in DB. */
 data class AppSettings(
+    val currentAccountId: String = "legacy",
+    val darkMode: Boolean = false,
     val apiId: Int = 0,
     val apiHash: String = "",
     val phoneNumberHint: String = "",
@@ -44,6 +46,8 @@ data class AppSettings(
 class SettingsRepository(private val context: Context) {
 
     private object K {
+        val currentAccountId = stringPreferencesKey("current_account_id")
+        val darkMode = booleanPreferencesKey("dark_mode")
         val apiId = intPreferencesKey("api_id")
         val apiHash = stringPreferencesKey("api_hash")
         val phone = stringPreferencesKey("phone_hint")
@@ -69,6 +73,8 @@ class SettingsRepository(private val context: Context) {
 
     val settings: Flow<AppSettings> = context.settingsStore.data.map { p ->
         AppSettings(
+            currentAccountId = p[K.currentAccountId] ?: "legacy",
+            darkMode = p[K.darkMode] ?: false,
             apiId = p[K.apiId] ?: 0,
             apiHash = p[K.apiHash] ?: "",
             phoneNumberHint = p[K.phone] ?: "",
@@ -99,6 +105,8 @@ class SettingsRepository(private val context: Context) {
     suspend fun update(transform: (AppSettings) -> AppSettings) {
         context.settingsStore.edit { p ->
             val cur = AppSettings(
+                currentAccountId = p[K.currentAccountId] ?: "legacy",
+                darkMode = p[K.darkMode] ?: false,
                 apiId = p[K.apiId] ?: 0, apiHash = p[K.apiHash] ?: "",
                 phoneNumberHint = p[K.phone] ?: "", loggedIn = p[K.loggedIn] ?: false,
                 globalSpeedLimitBps = p[K.speed] ?: 0L, concurrencyMode = p[K.concMode] ?: "AUTO",
@@ -119,6 +127,8 @@ class SettingsRepository(private val context: Context) {
                 statsKeepDays = p[K.statsKeepDays] ?: 180,
             )
             val n = transform(cur)
+            p[K.currentAccountId] = n.currentAccountId
+            p[K.darkMode] = n.darkMode
             p[K.apiId] = n.apiId; p[K.apiHash] = n.apiHash; p[K.phone] = n.phoneNumberHint
             p[K.loggedIn] = n.loggedIn; p[K.speed] = n.globalSpeedLimitBps
             p[K.concMode] = n.concurrencyMode; p[K.fixedConc] = n.fixedConcurrency
@@ -130,6 +140,12 @@ class SettingsRepository(private val context: Context) {
             p[K.storageUri] = n.storageTreeUri; p[K.storageTemplate] = n.storageTemplate
             p[K.watchdog] = n.reliabilityWatchdogEnabled; p[K.shizuku] = n.reliabilityShizukuEnabled
             p[K.autoBoot] = n.autoStartAfterBoot; p[K.statsKeepDays] = n.statsKeepDays
+        }
+    }
+
+    suspend fun clearTelegramCredentials() {
+        update {
+            it.copy(apiId = 0, apiHash = "", phoneNumberHint = "", loggedIn = false, currentAccountId = "legacy")
         }
     }
 

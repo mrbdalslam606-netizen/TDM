@@ -108,6 +108,30 @@ interface SourceDao {
 }
 
 @Dao
+interface AccountDao {
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(account: AccountEntity)
+
+    @Query("SELECT * FROM telegram_accounts ORDER BY lastUsedAt DESC")
+    fun observeAll(): Flow<List<AccountEntity>>
+
+    @Query("SELECT * FROM telegram_accounts ORDER BY lastUsedAt DESC")
+    suspend fun observeAllOnce(): List<AccountEntity>
+
+    @Query("SELECT * FROM telegram_accounts WHERE id = :id")
+    suspend fun byId(id: String): AccountEntity?
+
+    @Query("UPDATE telegram_accounts SET lastUsedAt = :at WHERE id = :id")
+    suspend fun markUsed(id: String, at: Long = System.currentTimeMillis())
+
+    @Query("UPDATE telegram_accounts SET loggedIn = :loggedIn WHERE id = :id")
+    suspend fun setLoggedIn(id: String, loggedIn: Boolean)
+
+    @Query("DELETE FROM telegram_accounts WHERE id = :id")
+    suspend fun delete(id: String)
+}
+
+@Dao
 interface SourceTemplateDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(t: SourceTemplateEntity): Long

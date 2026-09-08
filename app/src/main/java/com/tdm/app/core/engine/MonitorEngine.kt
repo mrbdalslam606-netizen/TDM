@@ -124,8 +124,10 @@ class MonitorEngine(
         val sourceId = sourceIdOverride ?: source?.id ?: 0L
         val entity = DownloadTaskEntity(
             sourceId = sourceId,
+            accountId = source?.accountId ?: settings.current().currentAccountId,
             telegramChatId = msg.chatId,
             telegramMessageId = msg.messageId,
+            topicId = source?.topicId,
             telegramFileId = file.fileId,
             telegramFileUniqueId = file.fileUniqueId,
             fileRemoteId = file.remoteId,

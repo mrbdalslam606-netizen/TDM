@@ -55,7 +55,8 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         container = AppContainer.get(this)
         setContent {
-            TdmTheme {
+            val appSettings = container.settingsRepository.settings.collectAsState(initial = null).value
+            TdmTheme(darkTheme = appSettings?.darkMode ?: androidx.compose.foundation.isSystemInDarkTheme()) {
                 Surface(Modifier.fillMaxSize()) {
                     RootNav(container, ::pickStorageTree)
                 }
@@ -133,7 +134,11 @@ fun RootNav(container: AppContainer, pickTree: () -> Unit) {
             composable("templates") { TemplatesScreen(container) }
             composable("history") { HistoryScreen(container) }
             composable("statistics") { StatisticsScreen(container) }
-            composable("settings") { SettingsScreen(container, pickTree) }
+            composable("settings") {
+                SettingsScreen(container, pickTree, onAccountRemoved = {
+                    nav.navigate("login") { popUpTo(0) }
+                })
+            }
             composable("reliability") { ReliabilityScreen(container, onBack = { nav.popBackStack() }) }
             composable("preview") { PreviewScreen(container, onBack = { nav.popBackStack() }) }
         }

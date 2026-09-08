@@ -28,6 +28,9 @@ interface TelegramClientPort {
     /** Resolve a public/private Telegram link and verify access to its chat/message. */
     suspend fun resolveSourceLink(input: String): TgChat?
 
+    /** Resolve a link while retaining the referenced message for direct file enqueueing. */
+    suspend fun resolveTelegramLink(input: String): TgResolvedLink?
+
     /** Chat id of "Saved Messages" (equals the user's own id in TDLib). */
     suspend fun myChatId(): Long
 
@@ -71,4 +74,11 @@ data class TgFileSnapshot(
     val localPath: String,
     val isDownloadingActive: Boolean,
     val isDownloadingCompleted: Boolean,
+)
+
+data class TgResolvedLink(
+    val chat: TgChat,
+    val message: TgMessageInfo? = null,
+    val topicId: Long? = null,
+    val inviteOnly: Boolean = false,
 )

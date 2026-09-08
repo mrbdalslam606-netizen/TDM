@@ -230,18 +230,23 @@ private fun SourceDialog(
                 scope.launch {
                     runCatching {
                         if (existing == null) {
-                            val chat = container.telegram.resolveSourceLink(handle)
+                            val resolved = container.telegram.resolveTelegramLink(handle)
                                 ?: throw IllegalStateException(
                                     "Telegram link is invalid, inaccessible, or the message could not be found: $handle"
                                 )
+                            val chat = resolved.chat
+                            val accountId = container.settingsRepository.current().currentAccountId
                             val s = SourceEntity(
                                 name = name.ifBlank { chat.title },
+                                accountId = accountId,
                                 type = when (chat.type) {
                                     "CHANNEL" -> SourceType.CHANNEL
                                     "SUPERGROUP", "GROUP" -> SourceType.GROUP
                                     else -> SourceType.CHAT
                                 },
                                 chatId = chat.id,
+                                messageId = resolved.message?.messageId ?: 0L,
+                                topicId = resolved.topicId,
                                 enabled = true,
                                 monitoringEnabled = monitoring,
                                 autoDownload = autoDownload,
@@ -255,6 +260,8 @@ private fun SourceDialog(
                                 startFromValue = startValue.trim(),
                             )
                             container.database.sourceDao().upsert(s)
+                            // A message/file link is both a source and an immediate discoverable item.
+                            resolved.message?.let { container.monitorInstance()?.onMessage(it) }
                         } else {
                             container.database.sourceDao().upsert(
                                 existing.copy(

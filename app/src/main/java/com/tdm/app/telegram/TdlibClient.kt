@@ -44,6 +44,7 @@ private object TdlibNativeLoader {
  */
 class TdlibClient(
     private val appContext: Context,
+    private val accountId: String = "legacy",
     private val chunkTimeoutMs: Long = 120_000L,
 ) : TelegramClientPort {
 
@@ -93,8 +94,10 @@ class TdlibClient(
 
     override fun isInitialized(): Boolean = initialized && client != null
 
-    private fun dbDir(): String = appContext.getDir("tdlib_db", Context.MODE_PRIVATE).absolutePath
-    private fun filesDir(): String = appContext.getDir("tdlib_files", Context.MODE_PRIVATE).absolutePath
+    private fun accountDir(): java.io.File = appContext.getDir("accounts", Context.MODE_PRIVATE)
+        .resolve(accountId).also { it.mkdirs() }
+    private fun dbDir(): String = accountDir().resolve("tdlib_db").also { it.mkdirs() }.absolutePath
+    private fun filesDir(): String = accountDir().resolve("tdlib_files").also { it.mkdirs() }.absolutePath
 
     /* ------------------------- generic send ------------------------- */
 
@@ -227,24 +230,28 @@ class TdlibClient(
     }
 
     override suspend fun resolveSourceLink(input: String): TgChat? {
+        return resolveTelegramLink(input)?.chat
+    }
+
+    override suspend fun resolveTelegramLink(input: String): TgResolvedLink? {
         return when (val link = TelegramLinkParser.parse(input)) {
-            is TelegramLink.PublicChat -> searchChatByUsername(link.username)
+            is TelegramLink.PublicChat -> searchChatByUsername(link.username)?.let { TgResolvedLink(it) }
             is TelegramLink.PublicMessage -> {
                 val chat = searchChatByUsername(link.username) ?: return null
-                if (message(chat.id, link.messageId) == null) return null
-                chat
+                val message = message(chat.id, link.messageId) ?: return null
+                TgResolvedLink(chat, message, link.topicId)
             }
             is TelegramLink.PrivateMessage -> {
                 val chat = chatById(link.chatId) ?: return null
-                if (message(chat.id, link.messageId) == null) return null
-                chat
+                val message = message(chat.id, link.messageId) ?: return null
+                TgResolvedLink(chat, message, link.topicId)
             }
             is TelegramLink.Invite -> {
                 val info = runCatching {
                     sendFn<TdApi.ChatInviteLinkInfo>(TdApi.CheckChatInviteLink(link.inviteLink))
                 }.getOrNull() ?: return null
                 if (info.chatId == 0L) return null
-                chatById(info.chatId)
+                chatById(info.chatId)?.let { TgResolvedLink(it, inviteOnly = true) }
             }
             null -> null
         }

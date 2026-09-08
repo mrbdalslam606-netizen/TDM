@@ -8,9 +8,12 @@ import androidx.room.PrimaryKey
 @Entity(tableName = "sources", indices = [Index(value = ["chatId"], unique = true)])
 data class SourceEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val accountId: String = "legacy",
     val name: String,
     val type: SourceType = SourceType.CHANNEL,
     val chatId: Long,
+    val messageId: Long = 0,
+    val topicId: Long? = null,
     val enabled: Boolean = true,
     val monitoringEnabled: Boolean = true,
     val autoDownload: Boolean = true,

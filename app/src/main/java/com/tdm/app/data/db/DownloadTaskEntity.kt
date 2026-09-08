@@ -24,8 +24,10 @@ data class DownloadTaskEntity(
 
     // --- identity ---
     val sourceId: Long = 0,
+    val accountId: String = "legacy",
     val telegramChatId: Long = 0,
     val telegramMessageId: Long = 0,
+    val topicId: Long? = null,
     val telegramFileId: Int = 0,           // mutable TDLib file id (may change between sessions)
     val telegramFileUniqueId: String = "", // stable identity across sessions
     val fileRemoteId: String = "",         // remote.unique_id fallback when available
