@@ -36,6 +36,8 @@ fun LoginScreen(container: AppContainer, onDone: () -> Unit) {
     val ctx = androidx.compose.ui.platform.LocalContext.current
 
     LaunchedEffect(auth) {
+        // Initialization hands control to the next auth screen; unlock its actions.
+        busy = false
         if (auth == TgAuthState.Ready) {
             container.settingsRepository.update { it.copy(loggedIn = true) }
             com.tdm.app.service.DownloadForegroundService.start(ctx, "login")
@@ -92,7 +94,8 @@ fun LoginScreen(container: AppContainer, onDone: () -> Unit) {
                                 }.onFailure(::err)
                             }
                         },
-                        enabled = !busy && apiId.isNotBlank() && apiHash.isNotBlank(),
+                        enabled = !busy && LoginValidation.isValidApiId(apiId) &&
+                            LoginValidation.isValidApiHash(apiHash),
                         modifier = Modifier.fillMaxWidth(),
                     ) { Text(if (busy) "Connecting…" else "Continue") }
                 } else {
@@ -124,9 +127,9 @@ fun LoginScreen(container: AppContainer, onDone: () -> Unit) {
                         runCatching {
                             container.settingsRepository.update { it.copy(phoneNumberHint = phone.trim()) }
                             container.telegram.sendPhoneNumber(phone)
-                        }.onFailure(::err)
+                        }.onSuccess { busy = false }.onFailure(::err)
                     }
-                }, enabled = !busy && phone.isNotBlank(), modifier = Modifier.fillMaxWidth()) {
+                }, enabled = !busy && LoginValidation.isValidPhone(phone), modifier = Modifier.fillMaxWidth()) {
                     Text("Send code")
                 }
             }
@@ -140,9 +143,10 @@ fun LoginScreen(container: AppContainer, onDone: () -> Unit) {
                 Button(onClick = {
                     scope.launch {
                         busy = true
-                        runCatching { container.telegram.submitCode(code) }.onFailure(::err)
+                        runCatching { container.telegram.submitCode(code) }
+                            .onSuccess { busy = false }.onFailure(::err)
                     }
-                }, enabled = !busy && code.isNotBlank(), modifier = Modifier.fillMaxWidth()) {
+                }, enabled = !busy && LoginValidation.isValidCode(code), modifier = Modifier.fillMaxWidth()) {
                     Text("Verify")
                 }
                 TextButton(onClick = { scope.launch { runCatching { container.telegram.resendCode() } } }) {
@@ -160,7 +164,8 @@ fun LoginScreen(container: AppContainer, onDone: () -> Unit) {
                 Button(onClick = {
                     scope.launch {
                         busy = true
-                        runCatching { container.telegram.submitPassword(password) }.onFailure(::err)
+                        runCatching { container.telegram.submitPassword(password) }
+                            .onSuccess { busy = false }.onFailure(::err)
                     }
                 }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
                     Text("Verify password")
