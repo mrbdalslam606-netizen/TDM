@@ -226,6 +226,30 @@ class TdlibClient(
         runCatching { sendFn(TdApi.LogOut()) }
     }
 
+    override suspend fun resolveSourceLink(input: String): TgChat? {
+        return when (val link = TelegramLinkParser.parse(input)) {
+            is TelegramLink.PublicChat -> searchChatByUsername(link.username)
+            is TelegramLink.PublicMessage -> {
+                val chat = searchChatByUsername(link.username) ?: return null
+                if (message(chat.id, link.messageId) == null) return null
+                chat
+            }
+            is TelegramLink.PrivateMessage -> {
+                val chat = chatById(link.chatId) ?: return null
+                if (message(chat.id, link.messageId) == null) return null
+                chat
+            }
+            is TelegramLink.Invite -> {
+                val info = runCatching {
+                    sendFn<TdApi.ChatInviteLinkInfo>(TdApi.CheckChatInviteLink(link.inviteLink))
+                }.getOrNull() ?: return null
+                if (info.chatId == 0L) return null
+                chatById(info.chatId)
+            }
+            null -> null
+        }
+    }
+
     override suspend fun close() {
         runCatching { sendFn(TdApi.Close()) }
     }

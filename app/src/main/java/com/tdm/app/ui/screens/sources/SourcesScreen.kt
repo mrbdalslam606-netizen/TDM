@@ -151,7 +151,7 @@ private fun SourceDialog(
                 if (existing == null) {
                     OutlinedTextField(
                         value = handle, onValueChange = { handle = it },
-                        label = { Text("@username or channel link") },
+                        label = { Text("Telegram username, message, topic, or invite link") },
                         modifier = Modifier.padding(top = 6.dp),
                     )
                 }
@@ -230,8 +230,10 @@ private fun SourceDialog(
                 scope.launch {
                     runCatching {
                         if (existing == null) {
-                            val chat = container.telegram.searchChatByUsername(handle)
-                                ?: throw IllegalStateException("Chat not found: $handle")
+                            val chat = container.telegram.resolveSourceLink(handle)
+                                ?: throw IllegalStateException(
+                                    "Telegram link is invalid, inaccessible, or the message could not be found: $handle"
+                                )
                             val s = SourceEntity(
                                 name = name.ifBlank { chat.title },
                                 type = when (chat.type) {

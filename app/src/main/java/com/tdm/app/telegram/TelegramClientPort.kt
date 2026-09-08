@@ -25,6 +25,9 @@ interface TelegramClientPort {
     suspend fun resendCode()
     suspend fun logOut()
 
+    /** Resolve a public/private Telegram link and verify access to its chat/message. */
+    suspend fun resolveSourceLink(input: String): TgChat?
+
     /** Chat id of "Saved Messages" (equals the user's own id in TDLib). */
     suspend fun myChatId(): Long
 
