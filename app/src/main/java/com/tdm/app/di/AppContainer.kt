@@ -16,7 +16,7 @@ import com.tdm.app.data.db.TdmDatabase
 import com.tdm.app.data.repo.SettingsRepository
 import com.tdm.app.service.DownloadForegroundService
 import com.tdm.app.service.WatchdogService
-import com.tdm.app.telegram.TdlibClient
+import com.tdm.app.telegram.TelegramAccountManager
 import com.tdm.app.telegram.TelegramClientPort
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -33,7 +33,10 @@ class AppContainer private constructor(private val appContext: Context) {
 
     val database: TdmDatabase by lazy { TdmDatabase.get(appContext) }
     val settingsRepository: SettingsRepository by lazy { SettingsRepository(appContext) }
-    val telegram: TelegramClientPort by lazy { TdlibClient(appContext) }
+    val accountManager: TelegramAccountManager by lazy {
+        TelegramAccountManager(appContext, database, settingsRepository)
+    }
+    val telegram: TelegramClientPort by lazy { accountManager }
     val storageAdapter: StorageAdapter by lazy { StorageAdapter(appContext) }
     val networkMonitor: NetworkMonitor by lazy { NetworkMonitor(appContext).also { it.refresh() } }
     val heartbeat: Heartbeat by lazy { Heartbeat(appContext) }
