@@ -403,6 +403,21 @@ class TdlibClient(
         is TdApi.MessageAudio -> fileInfo(c.audio.audio, c.audio.fileName, c.audio.mimeType, TgFileKind.AUDIO)
         is TdApi.MessageAnimation -> fileInfo(c.animation.animation, c.animation.fileName, c.animation.mimeType, TgFileKind.ANIMATION)
         is TdApi.MessageVoiceNote -> fileInfo(c.voiceNote.voice, "voice_${c.voiceNote.duration}.oga", "audio/ogg", TgFileKind.VOICE)
+        is TdApi.MessageVideoNote -> fileInfo(c.videoNote.video, "video_note_${c.videoNote.video.id}.mp4", "video/mp4", TgFileKind.VIDEO)
+        is TdApi.MessageSticker -> fileInfo(
+            c.sticker.sticker,
+            "sticker_${c.sticker.id}.${if (c.sticker.format is TdApi.StickerFormatTgs) "tgs" else "webp"}",
+            if (c.sticker.format is TdApi.StickerFormatTgs) "application/x-tgsticker" else "image/webp",
+            TgFileKind.IMAGE,
+        )
+        is TdApi.MessagePaidMedia -> c.media.firstOrNull()?.let { paid ->
+            when (paid) {
+                is TdApi.PaidMediaVideo -> fileInfo(paid.video.video, paid.video.fileName, paid.video.mimeType, TgFileKind.VIDEO)
+                is TdApi.PaidMediaPhoto -> paid.video?.let { fileInfo(it.video, it.fileName, it.mimeType, TgFileKind.VIDEO) }
+                    ?: paid.photo?.sizes?.maxByOrNull { it.width * it.height }?.photo?.let { fileInfo(it, "paid_photo_${it.id}.jpg", "image/jpeg", TgFileKind.IMAGE) }
+                else -> null
+            }
+        }
         is TdApi.MessagePhoto -> {
             val biggest = c.photo.sizes.maxByOrNull { it.width * it.height }
             biggest?.photo?.let { fileInfo(it, "photo_${it.id}.jpg", "image/jpeg", TgFileKind.IMAGE) }

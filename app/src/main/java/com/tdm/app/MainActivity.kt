@@ -136,7 +136,7 @@ fun RootNav(container: AppContainer, pickTree: () -> Unit) {
             composable("statistics") { StatisticsScreen(container) }
             composable("settings") {
                 SettingsScreen(container, pickTree, onAccountRemoved = {
-                    nav.navigate("login") { popUpTo(0) }
+                    hasRemainingAccount -> nav.navigate(if (hasRemainingAccount) "downloads" else "login") { popUpTo(0) }
                 })
             }
             composable("reliability") { ReliabilityScreen(container, onBack = { nav.popBackStack() }) }

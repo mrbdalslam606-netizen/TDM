@@ -35,6 +35,7 @@ object ScheduleMatcher {
         val prevDayBits = bitForCalendarDay(cal.get(Calendar.DAY_OF_WEEK) - 1 + if (cal.get(Calendar.DAY_OF_WEEK) - 1 < 1) 7 else 0)
 
         for (w in windows) {
+            if (w.startMinuteOfDay == w.endMinuteOfDay) continue
             if (w.startMinuteOfDay < w.endMinuteOfDay) {
                 // same-day window
                 if (w.daysBitmask and dowBits != 0 && minuteOfDay in w.startMinuteOfDay until w.endMinuteOfDay) return true
@@ -77,6 +78,7 @@ object ScheduleMatcher {
         )
         var bestEnd: Int? = null
         for (w in windows) {
+            if (w.startMinuteOfDay == w.endMinuteOfDay) continue
             if (w.startMinuteOfDay < w.endMinuteOfDay) {
                 if (w.daysBitmask and dowBits != 0 && minuteOfDay in w.startMinuteOfDay until w.endMinuteOfDay) {
                     val rem = w.endMinuteOfDay - minuteOfDay

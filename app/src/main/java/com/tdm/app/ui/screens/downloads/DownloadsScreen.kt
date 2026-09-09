@@ -3,6 +3,8 @@ package com.tdm.app.ui.screens.downloads
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -30,6 +32,7 @@ fun DownloadsScreen(container: AppContainer, onReliability: () -> Unit, onPrevie
     val settings = container.settingsRepository.settings.collectAsState(initial = null).value
     var showSpeedDialog by remember { mutableStateOf(false) }
     var showPriorityFor by remember { mutableStateOf<Long?>(null) }
+    var showLinkDialog by remember { mutableStateOf(false) }
 
     Column(Modifier.fillMaxSize()) {
 
@@ -56,6 +59,7 @@ fun DownloadsScreen(container: AppContainer, onReliability: () -> Unit, onPrevie
                     )
                     TextButton(onClick = onPreview) { Text("Preview") }
                     TextButton(onClick = onReliability) { Text("Reliability") }
+                    TextButton(onClick = { showLinkDialog = true }) { Text("Add Link") }
                 }
                 Row {
                     Text("Speed: ${Format.speed(snap?.totalSpeedBps ?: 0.0)}", modifier = Modifier.weight(1f))
@@ -140,6 +144,61 @@ fun DownloadsScreen(container: AppContainer, onReliability: () -> Unit, onPrevie
             showPriorityFor = null
         }
     }
+    if (showLinkDialog) DirectLinkDialog(container, onDismiss = { showLinkDialog = false })
+}
+
+@Composable
+private fun DirectLinkDialog(container: AppContainer, onDismiss: () -> Unit) {
+    val scope = rememberCoroutineScope()
+    val profiles = container.database.scheduleDao().observeProfiles().collectAsState(initial = emptyList()).value
+    var link by remember { mutableStateOf("") }
+    var immediate by remember { mutableStateOf(true) }
+    var profileId by remember { mutableStateOf<Long?>(null) }
+    var error by remember { mutableStateOf("") }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Add Telegram file link") },
+        text = {
+            Column {
+                OutlinedTextField(
+                    value = link, onValueChange = { link = it },
+                    label = { Text("Telegram message link") },
+                    placeholder = { Text("https://t.me/channel/123") },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) {
+                    Text("Download immediately", modifier = Modifier.weight(1f))
+                    Switch(checked = immediate, onCheckedChange = { immediate = it })
+                }
+                if (!immediate) {
+                    Text("Schedule profile", style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(top = 8.dp))
+                    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        profiles.forEach { p ->
+                            FilterChip(selected = profileId == p.id, onClick = { profileId = p.id }, label = { Text(p.name) })
+                        }
+                    }
+                }
+                if (error.isNotBlank()) Text(error, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelSmall)
+            }
+        },
+        confirmButton = {
+            Button(enabled = link.isNotBlank() && (immediate || profileId != null), onClick = {
+                scope.launch {
+                    runCatching {
+                        val resolved = container.telegram.resolveTelegramLink(link)
+                            ?: throw IllegalStateException("Link is invalid or inaccessible")
+                        val message = resolved.message
+                            ?: throw IllegalStateException("Use a message link that points to a file")
+                        val taskId = container.monitorInstance()?.enqueueDirectLink(message, if (immediate) null else profileId)
+                            ?: throw IllegalStateException("Download monitor is unavailable")
+                        if (immediate && taskId > 0) container.engineInstanceOrNull()?.downloadNow(taskId)
+                    }.onFailure { error = it.message ?: "Unable to add link" }
+                        .onSuccess { onDismiss() }
+                }
+            }) { Text("Add to downloads") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
 }
 
 @Composable

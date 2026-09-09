@@ -55,7 +55,7 @@ fun SchedulesScreen(container: AppContainer) {
                         }
                         windows.forEach { w ->
                             Text(
-                                "  ${dayNames(w.daysBitmask)}: ${Format.mmss(w.startMinuteOfDay)} – ${Format.mmss(w.endMinuteOfDay)}",
+                                "  ${dayNames(w.daysBitmask)}: ${format12(w.startMinuteOfDay)} – ${format12(w.endMinuteOfDay)}",
                                 style = MaterialTheme.typography.bodySmall,
                             )
                         }
@@ -87,6 +87,7 @@ private fun dayNames(mask: Int): String {
     return if (days.size == 7) "Daily" else days.joinToString(", ").ifBlank { "—" }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ProfileDialog(container: AppContainer, existing: ScheduleProfileEntity? = null, onDismiss: () -> Unit) {
     val scope = rememberCoroutineScope()
@@ -107,6 +108,8 @@ private fun ProfileDialog(container: AppContainer, existing: ScheduleProfileEnti
     }
     var startMin by remember { mutableStateOf(360) }  // 06:00
     var endMin by remember { mutableStateOf(540) }    // 09:00
+    var showStartPicker by remember { mutableStateOf(false) }
+    var showEndPicker by remember { mutableStateOf(false) }
     var days by remember { mutableStateOf(ScheduleMatcher.ALL_DAYS) }
 
     AlertDialog(
@@ -145,27 +148,21 @@ private fun ProfileDialog(container: AppContainer, existing: ScheduleProfileEnti
                 windows.forEachIndexed { i, w ->
                     Row {
                         Text(
-                            "${Format.mmss(w.startMinuteOfDay)}–${Format.mmss(w.endMinuteOfDay)} (${dayNames(w.daysBitmask)})",
+                            "${format12(w.startMinuteOfDay)}–${format12(w.endMinuteOfDay)} (${dayNames(w.daysBitmask)})",
                             Modifier.weight(1f), style = MaterialTheme.typography.bodySmall,
                         )
                         TextButton(onClick = { windows = windows.filterIndexed { j, _ -> j != i } }) { Text("✕") }
                     }
                 }
-                Text("Start (HH:MM)", style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(top = 4.dp))
-                var sMin by remember { mutableStateOf("360") }
-                var eMin by remember { mutableStateOf("540") }
+                Text("Window time (12-hour clock)", style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(top = 4.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    OutlinedTextField(sMin, { sMin = it.filter { c -> c.isDigit() } },
-                        label = { Text("start min") }, modifier = Modifier.weight(1f))
-                    OutlinedTextField(eMin, { eMin = it.filter { c -> c.isDigit() } },
-                        label = { Text("end min") }, modifier = Modifier.weight(1f))
+                    OutlinedButton(onClick = { showStartPicker = true }, modifier = Modifier.weight(1f)) { Text(format12(startMin)) }
+                    OutlinedButton(onClick = { showEndPicker = true }, modifier = Modifier.weight(1f)) { Text(format12(endMin)) }
                     Button(onClick = {
-                        val s = sMin.toIntOrNull() ?: return@Button
-                        val e = eMin.toIntOrNull() ?: return@Button
                         windows = windows + ScheduleWindowEntity(
                             profileId = existing?.id ?: 0,
-                            daysBitmask = days, startMinuteOfDay = s.coerceIn(0, 1439),
-                            endMinuteOfDay = e.coerceIn(0, 1439),
+                            daysBitmask = days, startMinuteOfDay = startMin,
+                            endMinuteOfDay = endMin,
                         )
                     }) { Text("Add") }
                 }
@@ -205,4 +202,30 @@ private fun ProfileDialog(container: AppContainer, existing: ScheduleProfileEnti
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
     )
+
+    if (showStartPicker) TimePickerDialog12(startMin, { startMin = it; showStartPicker = false }, { showStartPicker = false })
+    if (showEndPicker) TimePickerDialog12(endMin, { endMin = it; showEndPicker = false }, { showEndPicker = false })
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun TimePickerDialog12(initialMinute: Int, onPick: (Int) -> Unit, onDismiss: () -> Unit) {
+    val state = rememberTimePickerState(
+        initialHour = (initialMinute / 60) % 24,
+        initialMinute = initialMinute % 60,
+        is24Hour = false,
+    )
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Choose time") },
+        text = { TimePicker(state = state) },
+        confirmButton = { Button(onClick = { onPick(state.hour * 60 + state.minute) }) { Text("Set") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
+}
+
+private fun format12(minutes: Int): String {
+    val hour24 = (minutes / 60).coerceIn(0, 23)
+    val hour12 = when (val h = hour24 % 12) { 0 -> 12; else -> h }
+    return "%d:%02d %s".format(hour12, minutes % 60, if (hour24 < 12) "AM" else "PM")
 }

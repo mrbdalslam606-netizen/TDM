@@ -355,7 +355,7 @@ class DownloadEngine(
         if (src != null && !src.enabled) return false
 
         val scheduleOk = t.downloadNowRequested || src?.scheduleProfileId == null ||
-            (src.scheduleProfileId != null && windowActive)
+            (src.scheduleProfileId != null && profileWindowActive(src.scheduleProfileId))
         if (!scheduleOk) return false
 
         val policy = src?.networkPolicy ?: com.tdm.app.data.db.NetworkPolicy.ANY
@@ -369,6 +369,15 @@ class DownloadEngine(
             if (profile != null && !storage.hasSpaceFor(profile, t.size)) return false
         }
         return true
+    }
+
+    private suspend fun profileWindowActive(profileId: Long): Boolean {
+        val p = scheduleDao.profileById(profileId) ?: return false
+        if (!p.enabled) return false
+        val windows = scheduleDao.windows(profileId).map {
+            ScheduleMatcher.WindowRef(it.daysBitmask, it.startMinuteOfDay, it.endMinuteOfDay)
+        }
+        return ScheduleMatcher.isActive(windows)
     }
 
     private suspend fun avgHistoricalSpeed(): Double {
@@ -583,11 +592,12 @@ class DownloadEngine(
 
     /** Refresh stale TDLib file id by re-fetching the message (spec §57). */
     private suspend fun resolveFreshFile(t: DownloadTaskEntity): com.tdm.app.telegram.TgFileSnapshot? {
-        val direct = runCatching { tg.fileSnapshot(t.telegramFileId) }.getOrNull()
-        if (direct != null) return direct
-        val msg = tg.message(t.telegramChatId, t.telegramMessageId) ?: return null
+        // File IDs are client-local and can become stale after TDLib/session changes.
+        // Resolve the message first so the current TDLib client supplies the live ID.
+        val msg = tg.message(t.telegramChatId, t.telegramMessageId)
+        if (msg == null) return runCatching { tg.fileSnapshot(t.telegramFileId) }.getOrNull()
         val f = msg.file ?: return null
-        if (f.fileId != t.telegramFileId || f.fileUniqueId != t.telegramFileUniqueId) {
+        if (f.fileId != t.telegramFileId || f.fileUniqueId != t.telegramFileUniqueId || f.expectedSize != t.size) {
             db.taskDao().update(t.copy(telegramFileId = f.fileId, telegramFileUniqueId = f.fileUniqueId, size = f.expectedSize))
         }
         return tg.fileSnapshot(f.fileId)

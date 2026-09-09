@@ -27,18 +27,17 @@ fun SourcesScreen(container: AppContainer) {
     val scope = rememberCoroutineScope()
     val sources = container.database.sourceDao().observeAll().collectAsState(initial = emptyList()).value
     var adding by remember { mutableStateOf(false) }
-    var addingLink by remember { mutableStateOf(false) }
     var editing by remember { mutableStateOf<SourceEntity?>(null) }
     val monitor = container.monitorInstance()
 
     Column(Modifier.fillMaxSize()) {
         Row(Modifier.fillMaxWidth().padding(8.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             Button(onClick = { adding = true }, modifier = Modifier.weight(1f)) { Text("Add Source") }
-            OutlinedButton(onClick = { addingLink = true }, modifier = Modifier.weight(1f)) { Text("Add Link") }
             OutlinedButton(onClick = {
                 scope.launch {
                     com.tdm.app.core.logging.LogRepo.log(container.database, "SCHEDULER", "INFO", "manual scan started")
-                    monitor?.scanAll()
+                    runCatching { monitor?.scanAll() }
+                        .onFailure { e -> com.tdm.app.core.logging.LogRepo.log(container.database, "SCHEDULER", "ERROR", "manual scan failed: ${e.message}") }
                 }
             }, modifier = Modifier.weight(1f)) { Text("Scan Now") }
         }
@@ -66,7 +65,10 @@ fun SourcesScreen(container: AppContainer) {
                         }
                         Row(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                             TextButton(onClick = { editing = s }) { Text("Settings") }
-                            TextButton(onClick = { scope.launch { monitor?.scanSource(s) } }) { Text("Scan") }
+                            TextButton(onClick = { scope.launch {
+                                runCatching { monitor?.scanSource(s) }
+                                    .onFailure { e -> com.tdm.app.core.logging.LogRepo.log(container.database, "SCHEDULER", "ERROR", "source scan failed: ${e.message}") }
+                            } }) { Text("Scan") }
                             TextButton(onClick = { scope.launch {
                                 container.database.taskDao().activeAndQueued()
                                     .filter { it.sourceId == s.id && it.status == com.tdm.app.core.model.TaskStatus.QUEUED }
@@ -83,7 +85,6 @@ fun SourcesScreen(container: AppContainer) {
     }
 
     if (adding) SourceDialog(container, templateId = null, onDismiss = { adding = false })
-    if (addingLink) SourceDialog(container, templateId = null, directLink = true, onDismiss = { addingLink = false })
     editing?.let { s ->
         SourceDialog(container, templateId = null, existing = s, onDismiss = { editing = null })
     }

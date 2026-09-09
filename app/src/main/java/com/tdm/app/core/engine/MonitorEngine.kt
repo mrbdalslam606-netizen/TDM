@@ -108,6 +108,21 @@ class MonitorEngine(
         )
     }
 
+    /** Enqueue one accessible Telegram message without creating a monitored source. */
+    suspend fun enqueueDirectLink(msg: TgMessageInfo, scheduleProfileId: Long?): Long {
+        val file = msg.file ?: throw IllegalArgumentException("The Telegram message has no downloadable file")
+        if (isDuplicate(msg.chatId, msg.messageId, file.fileUniqueId, file.expectedSize)) return 0L
+        return createTask(
+            msg = msg,
+            file = file,
+            source = null,
+            status = TaskStatus.QUEUED,
+            seedQueue = true,
+            sourceIdOverride = 0L,
+            scheduleProfileIdOverride = scheduleProfileId,
+        )
+    }
+
     private suspend fun inboxSourceId(): Long {
         // inbox tasks keep sourceId = 0; UI shows them under "Inbox"
         return 0L
@@ -120,7 +135,8 @@ class MonitorEngine(
         status: TaskStatus,
         seedQueue: Boolean,
         sourceIdOverride: Long? = null,
-    ) {
+        scheduleProfileIdOverride: Long? = null,
+    ): Long {
         val sourceId = sourceIdOverride ?: source?.id ?: 0L
         val entity = DownloadTaskEntity(
             sourceId = sourceId,
@@ -143,12 +159,13 @@ class MonitorEngine(
                 com.tdm.app.data.db.QueueMode.TELEGRAM_MESSAGE,
             ),
             createdAt = System.currentTimeMillis(),
-            scheduleProfileId = source?.scheduleProfileId,
+            scheduleProfileId = scheduleProfileIdOverride ?: source?.scheduleProfileId,
         )
         val id = taskDao.insert(entity)
         if (id > 0 && seedQueue) {
             LogRepo.log(db, "QUEUE", "INFO", "task created: ${file.filename} (${file.expectedSize} bytes)")
         }
+        return id
     }
 
     /* ------------------------- scanning (spec §63) ------------------------- */

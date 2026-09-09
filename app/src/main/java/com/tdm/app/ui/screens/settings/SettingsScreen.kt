@@ -15,7 +15,7 @@ import kotlinx.coroutines.launch
 
 /** Settings with account switching/removal and global download controls. */
 @Composable
-fun SettingsScreen(container: AppContainer, pickTree: () -> Unit, onAccountRemoved: () -> Unit = {}) {
+fun SettingsScreen(container: AppContainer, pickTree: () -> Unit, onAccountRemoved: (hasRemainingAccount: Boolean) -> Unit = {}) {
     val scope = rememberCoroutineScope()
     val s = container.settingsRepository.settings.collectAsState(initial = null).value ?: return
     val accounts by container.database.accountDao().observeAll().collectAsState(initial = emptyList())
@@ -30,7 +30,7 @@ fun SettingsScreen(container: AppContainer, pickTree: () -> Unit, onAccountRemov
             TextButton(onClick = {
                 scope.launch {
                     container.accountManager.logoutCurrentAndRemove()
-                    onAccountRemoved()
+                    onAccountRemoved(container.accountManager.accounts().any { it.loggedIn })
                 }
             }) { Text("Log out and remove", color = MaterialTheme.colorScheme.error) }
         }

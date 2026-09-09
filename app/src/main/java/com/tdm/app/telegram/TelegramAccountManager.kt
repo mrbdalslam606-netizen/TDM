@@ -49,7 +49,12 @@ class TelegramAccountManager(
         context.getDir("accounts", Context.MODE_PRIVATE).resolve(accountId).deleteRecursively()
         database.accountDao().delete(accountId)
         val remaining = database.accountDao().observeAllOnce()
-        settings.update { it.copy(currentAccountId = remaining.firstOrNull()?.id ?: "legacy", loggedIn = remaining.firstOrNull()?.loggedIn == true) }
+        val next = remaining.firstOrNull()
+        activeId = next?.id ?: "legacy"
+        settings.update { it.copy(currentAccountId = next?.id ?: "legacy", loggedIn = next?.loggedIn == true) }
+        if (next?.loggedIn == true) {
+            runCatching { clients.getOrPut(next.id) { TdlibClient(context, next.id) }.init(next.apiId, next.apiHash) }
+        }
     }
 
     suspend fun logoutCurrentAndRemove() {
@@ -57,6 +62,7 @@ class TelegramAccountManager(
         if (id == "legacy") {
             runCatching { activeClient().logOut() }
             settings.clearTelegramCredentials()
+            activeId = "legacy"
             return
         }
         runCatching { clients[id]?.logOut() }

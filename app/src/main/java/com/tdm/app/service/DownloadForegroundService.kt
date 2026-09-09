@@ -18,6 +18,7 @@ import com.tdm.app.data.repo.SettingsRepository
 import com.tdm.app.telegram.TelegramClientPort
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -77,6 +78,13 @@ class DownloadForegroundService : LifecycleService() {
             val result = recovery.reconcileOnStartup(reason)
             engine.start()
             container.startWatchdog()
+
+            // Live Telegram updates must enter the same durable ingestion pipeline as scans.
+            launch {
+                container.telegram.incomingMessages.collect { message ->
+                    runCatching { monitor.onMessage(message) }
+                }
+            }
 
             // monitor loop: sources + inbox (spec §63) — persistent bookmarks
             var lastScan = 0L
